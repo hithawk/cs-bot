@@ -1,10 +1,7 @@
 import { useState } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { Copy, Check, Loader2, Sparkles, Send } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 type Sender = 'yoon' | 'rachel';
 type Platform = 'toss' | 'alwayz' | 'kakao' | 'coupang' | 'naver';
@@ -13,18 +10,18 @@ type ProductType = 'fresh' | 'industrial';
 type CustomerComplaint = 'broken' | 'quality' | 'size_appearance' | 'delay' | 'refund_demand' | 'invalid_reason';
 type SellerStance = 'checking' | 'evidence_request' | 'partial_proposal' | 'full_refund_review' | 'impossible';
 
-const PLATFORMS: { value: Platform; label: string }[] = [
+const PLATFORMS = [
   { value: 'toss', label: '토스 (Toss)' }, { value: 'alwayz', label: '올웨이즈 (Alwayz)' },
   { value: 'kakao', label: '카카오 (Kakao)' }, { value: 'coupang', label: '쿠팡 (Coupang)' }, { value: 'naver', label: '네이버 (Naver)' },
 ];
 
-const COMPLAINTS: { value: CustomerComplaint; label: string }[] = [
+const COMPLAINTS = [
   { value: 'broken', label: '① 파손/터짐/썩음' }, { value: 'quality', label: '② 맛/품질 불만' },
   { value: 'size_appearance', label: '③ 크기 및 외관 불만' }, { value: 'delay', label: '④ 배송 지연 및 누락' },
   { value: 'refund_demand', label: '⑤ 전액 환불 강경 요구' }, { value: 'invalid_reason', label: '⑥ 사유 미해당' },
 ];
 
-const STANCES: { value: SellerStance; label: string }[] = [
+const STANCES = [
   { value: 'checking', label: '① 문제 확인/협의 중' }, { value: 'evidence_request', label: '② 증빙자료 요청 (사진 3종)' },
   { value: 'partial_proposal', label: '③ 부분 환불 제안' }, { value: 'full_refund_review', label: '④ 전액 환불 논의' },
   { value: 'impossible', label: '⑤ 환불 절대 불가' },
@@ -44,24 +41,41 @@ export default function CSGenerator() {
   const [isCopied, setIsCopied] = useState(false);
 
   const generateResponse = async () => {
-    if (!inquiry.trim() || !ai) return;
+    if (!inquiry.trim() || !apiKey) {
+      setGeneratedResponse(apiKey ? "문의 내용을 입력해주세요." : "API 키가 설정되지 않았습니다.");
+      return;
+    }
     setIsLoading(true);
     setGeneratedResponse('');
+
     try {
       const storeName = sender === 'yoon' ? '윤씨네 행복상회' : '맛능상회';
-      const prompt = `당신은 전문 CS 상담원입니다. 
-      [정보] 쇼핑몰:${storeName}, 플랫폼:${platform}, 불만:${customerComplaint}, 입장:${sellerStance}, 문의:"${inquiry}"
+      const prompt = `당신은 온라인 쇼핑몰 [${storeName}]의 전문 CS 상담원입니다.
+      [정보] 플랫폼:${platform}, 불만:${customerComplaint}, 입장:${sellerStance}, 문의:"${inquiry}"
       [규칙] 1.인사:"안녕하세요, 고객님. ${storeName}입니다." 고정. 2.문의내용 재언급 금지. 3.호칭:"고객님" 고정.
-      ${sellerStance === 'evidence_request' ? `4.증빙요청 필수문구: "상품 수령 후 최대 48시간 이내에 아래 사진 3종을 첨부하여 문의(1:1 문의 혹은 1533-5710 문자)해 주시면 확인 즉시 책임지고 처리해 드리겠습니다.
+      ${sellerStance === 'evidence_request' ? `4.증빙요청 필수: "상품 수령 후 최대 48시간 이내에 아래 사진 3종을 첨부하여 문의(1:1 문의 혹은 1533-5710 문자)해 주시면 확인 즉시 책임지고 처리해 드리겠습니다.
       1. 제품의 운송장 사진: 송장 번호와 주소가 식별 가능해야 합니다.
       2. 전체 수량을 셀 수 있는 사진: 바둑판처럼 정렬하여 전체 개수가 한눈에 들어와야 합니다.
       3. 문제 상품 확인 사진: 문제 과수의 개수와 상태가 명확히 보이도록 여러 장 촬영 부탁드립니다."` : ''}
-      ${productTypes.includes('fresh') ? '5.신선식품:회수불가안내,자체폐기요청.' : ''}
-      ${platform === 'toss' ? '6.토스:수정불가안내,새문의글요청.' : ''} ${customInstruction}`;
+      ${productTypes.includes('fresh') ? '5.신선식품:회수불가,자체폐기요청.' : ''} ${customInstruction}`;
 
-      const res = await ai.models.generateContent({ model: "gemini-2.0-flash", contents: [{ role: "user", parts: [{ text: prompt }] }] });
-      setGeneratedResponse(res.response.text() || "오류");
-    } catch (e) { setGeneratedResponse("에러 발생"); } finally { setIsLoading(false); }
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+
+      const data = await response.json();
+      if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        setGeneratedResponse(data.candidates[0].content.parts[0].text);
+      } else {
+        throw new Error("응답 형식 오류");
+      }
+    } catch (e) {
+      setGeneratedResponse("통신 에러가 발생했습니다. API 키와 네트워크를 확인해주세요.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
