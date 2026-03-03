@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { Copy, Check, Loader2, Sparkles, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Vite 환경 기준 환경 변수 설정
+// Vite environment setup.
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
@@ -103,6 +103,8 @@ export default function CSGenerator() {
            - '환불완료' 상태일 경우 사진 증빙 등 추가 요구를 제외하고 환불 완료 사실만 안내하세요.
            ${sellerStance === 'impossible' ? '- 환불 불가 입장일 경우, 신선식품 특성상 주관적 판단(맛, 모양 등)으로 인한 환불은 불가함을 안내하세요.' : ''}
            ${(sellerStance === 'checking' || sellerStance === 'partial_negotiation') ? '- 농가/공급사와 협의 중이므로 잠시 기다려 달라는 안내를 포함하세요.' : ''}
+        6. 고객 응대 매너 (핵심): 고객의 감정이 상하지 않도록 고객 문의 내용을 그대로 복사하여 재언급하는 것을 절대 금지합니다.
+        7. 호칭: "레이첼 고객님"처럼 발신자 이름(레이첼)을 고객에게 지칭하는 오류를 절대 범하지 마세요. 답변 서두에 발신자를 밝힐 때만 사용하고, 고객을 부를 때는 "고객님"이라고만 명시하세요.
       `;
 
       const response = await ai.models.generateContent({
