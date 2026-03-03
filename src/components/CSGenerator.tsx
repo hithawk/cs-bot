@@ -59,11 +59,15 @@ export default function CSGenerator() {
       3. 문제 상품 확인 사진: 문제 과수의 개수와 상태가 명확히 보이도록 여러 장 촬영 부탁드립니다."` : ''}
       ${productTypes.includes('fresh') ? '5.신선식품:회수불가,자체폐기요청.' : ''} ${customInstruction}`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
+const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ 
+    contents: [{ 
+      parts: [{ text: prompt }] 
+    }] 
+  })
+});
 
       const data = await response.json();
       if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
