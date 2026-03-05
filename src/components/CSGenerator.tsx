@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useState, ChangeEvent } from 'react';
 import { Copy, Check, Loader2, Sparkles, Send } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
 
 type Sender = 'yoon' | 'rachel';
 type Platform = 'toss' | 'alwayz' | 'kakao' | 'coupang' | 'naver';
 type ProductType = 'fresh' | 'industrial';
 type CustomerComplaint = 'none' | 'broken' | 'quality' | 'size_appearance' | 'delay' | 'refund_demand' | 'invalid_reason';
-type SellerStance = 'checking' | 'evidence_request' | 'partial_proposal' | 'full_refund_review' | 'impossible';
+type SellerStance = 'none' | 'checking' | 'evidence_request' | 'partial_proposal' | 'full_refund_review' | 'impossible';
 
 const PLATFORMS: { value: Platform; label: string }[] = [
   { value: 'toss', label: '토스 (Toss)' }, { value: 'alwayz', label: '올웨이즈 (Alwayz)' },
@@ -26,6 +26,7 @@ const CUSTOMER_COMPLAINTS: { value: CustomerComplaint; label: string }[] = [
 ];
 
 const SELLER_STANCES: { value: SellerStance; label: string }[] = [
+  { value: 'none', label: '선택 안 함 (기타/일반 응대)' },
   { value: 'checking', label: '① 문제 확인 및 협의 중' },
   { value: 'evidence_request', label: '② 자료 미흡 - 사진 증빙 요청 (48시간)' },
   { value: 'partial_proposal', label: '③ 자료 확인 완료 - 부분 환불 제안' },
@@ -38,12 +39,24 @@ export default function CSGenerator() {
   const [platform, setPlatform] = useState<Platform>('naver');
   const [productType, setProductType] = useState<ProductType>('fresh');
   const [customerComplaint, setCustomerComplaint] = useState<CustomerComplaint>('none');
-  const [sellerStance, setSellerStance] = useState<SellerStance>('checking');
+  const [sellerStance, setSellerStance] = useState<SellerStance>('none');
   const [inquiry, setInquiry] = useState('');
   const [customInstruction, setCustomInstruction] = useState('');
+  const [image, setImage] = useState<string | null>(null);
   const [generatedResponse, setGeneratedResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const generateResponse = async () => {
     if (!inquiry.trim() || !apiKey) return;
@@ -77,20 +90,38 @@ export default function CSGenerator() {
           3. 문제 상품 확인 사진: 문제 부위가 명확히 보이도록 여러 장 촬영 부탁드립니다."` : '이미 증빙이 완료되었거나 필요 없는 상황이므로 사진 요청 문구는 절대 넣지 마세요.'}
 
         - ${sellerStance === 'partial_proposal' ? '자료 확인 완료를 언급하고, 부분 환불 제안 및 동의 시 환불 계좌 요청 내용을 포함하세요.' : ''}
-        - ${isFresh ? "'택배사 회수 불가(위생/오염)' 논리를 적용하여 자체 폐기를 정중히 요청하세요." : '공산품의 경우 일반적인 반품/교환 회수 절차를 안내하세요.'}
+        - ${isFresh && sellerStance !== 'impossible' && ['broken', 'quality', 'size_appearance'].includes(customerComplaint) ? "'택배사 회수 불가(위생/오염)' 논리를 적용하여 자체 폐기를 정중히 요청하세요. 단, 환불 불가 상황이거나 단순 문의 시에는 절대 언급하지 마세요." : '공산품의 경우 일반적인 반품/교환 회수 절차를 안내하세요.'}
         - ${platform === 'toss' ? '토스 안내: 답변 수정 불가 및 안심번호 만료로 인한 소통 단절 안내, 추가 문의 시 "새로운 문의글" 작성 요청 포함.' : ''}
         
+        [사진 분석 지침]
+        - 만약 고객이 보낸 사진이 첨부되어 있다면, 사진 속 상품의 상태를 정밀하게 분석하세요.
+        - 사진에 보이는 전체 과수(개수)와 파손/썩음/무름 등 문제가 있는 과수의 개수를 구체적으로 파악하여 답변에 언급하세요. (예: "보내주신 사진을 확인하니 전체 12과 중 3과 정도가 무른 상태인 것으로 확인됩니다.")
+        - 분석한 내용을 바탕으로 보상안(부분 환불 등)의 근거로 삼으세요.
+
         [지시 사항 반영]
         ${customInstruction}
 
         [마무리]
-        마지막에 "${senderName} 드림."으로 맺어주세요.
+        마지막에 "${storeName} 드림."으로 맺어주세요.
       `;
+
+      const parts: any[] = [{ text: prompt }];
+      
+      if (image) {
+        const base64Data = image.split(',')[1];
+        const mimeType = image.split(';')[0].split(':')[1];
+        parts.push({
+          inlineData: {
+            data: base64Data,
+            mimeType: mimeType
+          }
+        });
+      }
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        body: JSON.stringify({ contents: [{ parts }] })
       });
 
       const data = await response.json();
@@ -143,6 +174,37 @@ export default function CSGenerator() {
             </div>
 
             <textarea value={inquiry} onChange={e => setInquiry(e.target.value)} placeholder="고객 문의 내용을 입력하세요 (예: 주소지 변경 요청 등)" className="w-full h-32 p-4 border rounded-xl resize-none text-sm outline-none focus:ring-1 focus:ring-stone-900" />
+            
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-stone-400 uppercase ml-1">상품 상태 사진 첨부 (AI 분석용)</label>
+              <div className="flex items-center gap-4">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleImageUpload}
+                  className="hidden" 
+                  id="image-upload"
+                />
+                <label 
+                  htmlFor="image-upload"
+                  className="flex-1 p-3 border-2 border-dashed border-stone-200 rounded-xl text-center text-xs text-stone-500 cursor-pointer hover:bg-stone-50 transition-all"
+                >
+                  {image ? '사진 변경하기' : '클릭하여 사진 업로드'}
+                </label>
+                {image && (
+                  <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-stone-200">
+                    <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                    <button 
+                      onClick={() => setImage(null)}
+                      className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl-lg"
+                    >
+                      <Check size={10} className="rotate-45" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <textarea value={customInstruction} onChange={e => setCustomInstruction(e.target.value)} placeholder="AI 추가 지시 사항 (예: 주소지 변경 불가하니 재주문 안내해줘)" className="w-full h-16 p-3 border rounded-xl resize-none text-xs bg-stone-50/50" />
 
             <button onClick={generateResponse} disabled={isLoading} className="w-full py-4 bg-stone-900 text-white rounded-xl flex justify-center items-center gap-2 hover:bg-stone-800 disabled:opacity-50">
